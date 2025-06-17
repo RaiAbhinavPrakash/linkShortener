@@ -146,14 +146,45 @@ func GetLinkAnalytics(c *gin.Context) {
 		return
 	}
 
+	// --- Pagination ---
+	pageStr := c.DefaultQuery("page", "1")
+	limitStr := c.DefaultQuery("limit", "10")
+
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 1 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
+	var total int64
+	config.DB.Model(&models.ClickAnalytics{}).Where("url_id = ?", url.ID).Count(&total)
+
 	var logs []models.ClickAnalytics
-	config.DB.Where("url_id = ?", url.ID).Order("created_at desc").Find(&logs)
+	config.DB.Where("url_id = ?", url.ID).
+		Order("created_at desc").
+		Limit(limit).
+		Offset(offset).
+		Find(&logs)
+
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
 
 	c.JSON(http.StatusOK, gin.H{
 		"short_code":   url.ShortCode,
 		"original_url": url.OriginalURL,
 		"click_count":  url.ClickCount,
 		"analytics":    logs,
+		"pagination": gin.H{
+			"page":       page,
+			"limit":      limit,
+			"total":      total,
+			"totalPages": totalPages,
+		},
 	})
 }
 
