@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"encoding/csv"
+	"fmt"
 	"linkShortener/backend/config"
 	"linkShortener/backend/models"
 	"log"
@@ -162,9 +164,11 @@ func GetLinkAnalytics(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
+	// Total count of analytics for the URL
 	var total int64
 	config.DB.Model(&models.ClickAnalytics{}).Where("url_id = ?", url.ID).Count(&total)
 
+	// Fetch paginated analytics logs
 	var logs []models.ClickAnalytics
 	config.DB.Where("url_id = ?", url.ID).
 		Order("created_at desc").
@@ -239,4 +243,40 @@ func DeleteShortURL(c *gin.Context) {
 	config.DB.Delete(&url)
 
 	c.JSON(http.StatusOK, gin.H{"message": "URL deleted successfully"})
+}
+
+func ExportAnalyticsCSV(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	code := c.Param("code")
+
+	var url models.URL
+	if err := config.DB.Where("short_code = ? AND user_id = ?", code, userID).First(&url).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Link not found"})
+		return
+	}
+
+	var logs []models.ClickAnalytics
+	config.DB.Where("url_id = ?", url.ID).Order("created_at desc").Find(&logs)
+
+	// Set CSV headers
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=analytics_%s_%d.csv", code, time.Now().Unix()))
+	c.Header("Content-Type", "text/csv")
+
+	writer := csv.NewWriter(c.Writer)
+	defer writer.Flush()
+
+	// Write CSV headers
+	writer.Write([]string{"ID", "URL ID", "IP Address", "Referrer", "User Agent", "Created At"})
+
+	// Write each record
+	for _, log := range logs {
+		writer.Write([]string{
+			strconv.Itoa(int(log.ID)),
+			strconv.Itoa(int(log.URLID)),
+			log.IPAddress,
+			log.Referrer,
+			log.UserAgent,
+			log.CreatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
 }

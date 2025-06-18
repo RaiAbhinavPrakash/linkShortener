@@ -24,6 +24,7 @@ func SetupRoutes(r *gin.Engine) {
 		api.PUT("/links/:id", controllers.UpdateShortURL)
 		api.DELETE("/links/:id", controllers.DeleteShortURL)
 		api.PUT("/user/update", controllers.UpdateUserProfile)
+		api.GET("/links/:code/analytics/export", controllers.ExportAnalyticsCSV)
 	}
 
 	r.GET("/s/:code", controllers.RedirectURL)
